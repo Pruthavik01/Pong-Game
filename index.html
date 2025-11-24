@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Pong Game</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+    <h1>The Pong Arena 🏓</h1>
+    <p>Step into the challenge. Can you top the leaderboard?</p>
+    
+    <div>
+        <div class="canvadiv">
+            <canvas id="canvas"></canvas>    
+        </div>
+    
+        <div class="dash">
+            <div class="score"> 
+                <h3>Score :&nbsp;</h3>
+                <h3 id="score"> 0</h3>
+            </div>
+            
+            <div style="display: flex; ">
+                <div class="sound"> <i id="sound" class="fa-solid fa-volume-high"></i>  </div> 
+                <div class="level"> 
+                    <p>Level : &nbsp;</p> 
+                    <p id="level">1</p>
+                </div>        
+            </div>
+        </div>
+    </div>
+
+</body>
+<script src="script.js"></script>
+</html>
