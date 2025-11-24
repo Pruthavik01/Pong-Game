@@ -3,12 +3,16 @@ const ctx = canvas.getContext("2d");
 
 const rect = canvas.getBoundingClientRect();
 
+// Flame trail
+const trail = [];
+const TRAIL_MAX = 12;   // how long the trail is
+
 let cw = rect.width;
 let ch = rect.height;
 let lives = 3;
 let gameOver = false;
 
-function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
 
 function resizeCanvas() {
@@ -43,15 +47,15 @@ function Ball(pos, velocity, radius) {
     this.velocity = velocity;
     this.radius = radius;
 
-    this.update = function(){
-    const vx = this.velocity.x;
-    const vy = this.velocity.y;
-    const steps = Math.ceil(Math.hypot(vx, vy) / (this.radius)); 
-    for (let i = 0; i < steps; i++) {
-        this.pos.x += vx / steps;
-        this.pos.y += vy / steps;
+    this.update = function () {
+        const vx = this.velocity.x;
+        const vy = this.velocity.y;
+        const steps = Math.ceil(Math.hypot(vx, vy) / (this.radius));
+        for (let i = 0; i < steps; i++) {
+            this.pos.x += vx / steps;
+            this.pos.y += vy / steps;
+        }
     }
-}
 
     this.draw = function () {
         ctx.fillStyle = "#FFFFFF";
@@ -94,7 +98,7 @@ function Paddle(pos, velocity, width, height, color) {
 
     this.update = function () {
         // center the paddle on mouse Y and clamp inside canvas
-        this.pos.y = coordY - this.height/2;
+        this.pos.y = coordY - this.height / 2;
         if (this.pos.y < 0) this.pos.y = 0;
         if (this.pos.y + this.height > ch) this.pos.y = ch - this.height;
     }
@@ -131,13 +135,13 @@ function updateLevel(paddle) {
 
 }
 
-function ballPaddleCollision(ball, paddle){
+function ballPaddleCollision(ball, paddle) {
     const nearestX = clamp(ball.pos.x, paddle.pos.x, paddle.pos.x + paddle.width);
     const nearestY = clamp(ball.pos.y, paddle.pos.y, paddle.pos.y + paddle.height);
 
     const dx = ball.pos.x - nearestX;
     const dy = ball.pos.y - nearestY;
-    const dist2 = dx*dx + dy*dy;
+    const dist2 = dx * dx + dy * dy;
     const r2 = ball.radius * ball.radius;
 
     const isColliding = dist2 <= r2;
@@ -269,16 +273,38 @@ function player2Ai(ball, paddle) {
 
 function resetBall() {
     ball.pos.x = 100;
-    ball.pos.y = Math.random()*10 + 100;
+    ball.pos.y = Math.random() * 10 + 100;
     // keep the SAME velocity direction but reset speed if needed
     ball.velocity.x *= -1;
     ball.velocity.y *= -1;
+    trail.length = 0;
+}
+
+function drawTrail() {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter"; // additive glow
+
+    for (let i = 0; i < trail.length; i++) {
+        const p = trail[i];
+        const t = i / TRAIL_MAX;     // 0 = newest, 1 = oldest
+        const size = ball.radius * (1 - t * 0.9);
+        const alpha = 1 - t;
+
+        // white fading flame
+        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
 }
 
 
 const ball = new Ball(vec2(100, 100), vec2(5, 5), 9);
-const paddle1 = new Paddle(vec2(5, 100), vec2(10, 10), cw*0.02, ch*0.2, "#3498DB");
-const paddle2 = new Paddle(vec2(cw*0.97, 220), vec2(10, 10), cw*0.02, ch*0.2, "#E74C3C");
+const paddle1 = new Paddle(vec2(5, 100), vec2(10, 10), cw * 0.02, ch * 0.2, "#3498DB");
+const paddle2 = new Paddle(vec2(cw * 0.97, 220), vec2(10, 10), cw * 0.02, ch * 0.2, "#E74C3C");
 
 
 
@@ -300,6 +326,13 @@ function gameUpdate() {
         resetBall();
     }
 
+    // add a new trail sample (place right after ball.update())
+    // Add new flame trail point
+    trail.unshift({ x: ball.pos.x, y: ball.pos.y });
+    if (trail.length > TRAIL_MAX) trail.pop();
+
+
+
     paddle1.update();
     paddleCollisionWithWall(paddle1);
     ballCollisionWithWalls(ball);
@@ -310,6 +343,7 @@ function gameUpdate() {
 }
 
 function gameDraw() {
+    drawTrail();
     ball.draw();
     paddle1.draw();
     paddle2.draw();
