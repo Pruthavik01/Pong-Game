@@ -8,6 +8,9 @@ let ch = rect.height;
 let lives = 3;
 let gameOver = false;
 
+function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+
 function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
     // CSS pixel size
@@ -28,7 +31,7 @@ resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
 let coordY = 0;
 window.addEventListener("mousemove", function (e) {
-    coordY = e.clientY;
+    coordY = e.clientY - canvas.getBoundingClientRect().top;
 });
 
 function vec2(x, y) {
@@ -40,10 +43,15 @@ function Ball(pos, velocity, radius) {
     this.velocity = velocity;
     this.radius = radius;
 
-    this.update = function () {
-        this.pos.x += this.velocity.x;
-        this.pos.y += this.velocity.y;
+    this.update = function(){
+    const vx = this.velocity.x;
+    const vy = this.velocity.y;
+    const steps = Math.ceil(Math.hypot(vx, vy) / (this.radius)); 
+    for (let i = 0; i < steps; i++) {
+        this.pos.x += vx / steps;
+        this.pos.y += vy / steps;
     }
+}
 
     this.draw = function () {
         ctx.fillStyle = "#FFFFFF";
@@ -85,8 +93,12 @@ function Paddle(pos, velocity, width, height, color) {
     this.level = 1;
 
     this.update = function () {
-        this.pos.y = coordY - 200;
+        // center the paddle on mouse Y and clamp inside canvas
+        this.pos.y = coordY - this.height/2;
+        if (this.pos.y < 0) this.pos.y = 0;
+        if (this.pos.y + this.height > ch) this.pos.y = ch - this.height;
     }
+
     this.draw = function () {
         ctx.fillStyle = this.color;
         ctx.fillRect(this.pos.x, this.pos.y, this.width, this.height);
@@ -119,68 +131,154 @@ function updateLevel(paddle) {
 
 }
 
+function ballPaddleCollision(ball, paddle){
+    const nearestX = clamp(ball.pos.x, paddle.pos.x, paddle.pos.x + paddle.width);
+    const nearestY = clamp(ball.pos.y, paddle.pos.y, paddle.pos.y + paddle.height);
 
-function ballPaddleCollision(ball, paddle) {
-    let dx = Math.abs(ball.pos.x - paddle.getCenter().x);
-    let dy = Math.abs(ball.pos.y - paddle.getCenter().y);
+    const dx = ball.pos.x - nearestX;
+    const dy = ball.pos.y - nearestY;
+    const dist2 = dx*dx + dy*dy;
+    const r2 = ball.radius * ball.radius;
 
-    if (dx <= (ball.radius + paddle.getHalfWidth()) && dy <= (ball.radius + paddle.getHalfHeight())) {
-        ball.velocity.x *= -1;
+    const isColliding = dist2 <= r2;
 
-        if (ball.velocity.x > 0) {
+    if (isColliding) {
+        if (ball.lastHit === paddle) return;
+        ball.lastHit = paddle;
+
+        const paddleOnLeft = paddle.pos.x < cw / 2;
+
+        const relativeY = (ball.pos.y - (paddle.pos.y + paddle.height / 2)) / (paddle.height / 2);
+        const maxBounce = Math.PI / 3;
+        const bounceAngle = clamp(relativeY, -1, 1) * maxBounce;
+
+        const speed = Math.hypot(ball.velocity.x, ball.velocity.y) || 5;
+        const dirX = paddleOnLeft ? 1 : -1;
+
+        ball.velocity.x = dirX * Math.cos(bounceAngle) * speed;
+        ball.velocity.y = Math.sin(bounceAngle) * speed;
+
+        if (paddleOnLeft) {
+            ball.pos.x = paddle.pos.x + paddle.width + ball.radius + 0.5;
+        } else {
+            ball.pos.x = paddle.pos.x - ball.radius - 0.5;
+        }
+
+        // SCORE ONLY FOR PADDLE 1
+        if (paddle === paddle1) {
             updateScore(paddle);
 
-            if (paddle.score % 5 == 0) {
-                // Normalize direction
-                let dirX = ball.velocity.x > 0 ? 1 : -1;
-                let dirY = ball.velocity.y > 0 ? 1 : -1;
+            if (paddle.score % 5 === 0) {
+                const signX = ball.velocity.x > 0 ? 1 : -1;
+                const signY = ball.velocity.y > 0 ? 1 : -1;
 
-                // Increase magnitude
-                ball.velocity.x = dirX * (Math.abs(ball.velocity.x) + 2);
-                ball.velocity.y = dirY * (Math.abs(ball.velocity.y) + 2);
+                ball.velocity.x = signX * (Math.abs(ball.velocity.x) + 2);
+                ball.velocity.y = signY * (Math.abs(ball.velocity.y) + 2);
 
                 updateLevel(paddle);
             }
+        }
 
+    } else {
+        if (ball.lastHit === paddle) {
+            ball.lastHit = null;
+        }
+    }
+}
+
+
+// Predict where the ball will cross targetX and how many frames it will take.
+// Returns { y: predictedY, steps: frames }.
+function predictBallHit(ball, targetX, maxSteps = 5000) {
+    // clone state
+    let simX = ball.pos.x;
+    let simY = ball.pos.y;
+    let velX = ball.velocity.x;
+    let velY = ball.velocity.y;
+
+    // If velocity is zero on x, just return current y quickly
+    if (velX === 0) return { y: simY, steps: 1 };
+
+    // decide direction of crossing relative to start
+    const wantToTheRight = targetX >= simX;
+
+    for (let step = 0; step < maxSteps; step++) {
+        simX += velX;
+        simY += velY;
+
+        // bounce top
+        if (simY - ball.radius <= 0) {
+            simY = ball.radius;
+            velY *= -1;
+        }
+        // bounce bottom (ch is your CSS canvas height)
+        if (simY + ball.radius >= ch) {
+            simY = ch - ball.radius;
+            velY *= -1;
+        }
+
+        // Have we crossed targetX? Handle both directions.
+        if ((wantToTheRight && simX >= targetX) || (!wantToTheRight && simX <= targetX)) {
+            return { y: simY, steps: step + 1 };
         }
     }
 
+    // fallback: return current Y if we didn't reach in maxSteps
+    return { y: simY, steps: maxSteps };
 }
 
+// Predictive AI - near-impossible to miss when tuned.
+// Replace your current player2Ai with this.
 function player2Ai(ball, paddle) {
-    // paddle.pos.y = ball.pos.y;
-    paddle.velocity.y = Math.abs(ball.velocity.y)*2;
-    if (ball.velocity.x > 0) {
-        if (ball.pos.y > paddle.getCenter().y) {
-            paddle.pos.y += paddle.velocity.y;
+    // targetX: the X coordinate where we want to intercept the ball.
+    // use a small offset so the ball doesn't overlap the paddle when detected
+    const interceptX = paddle.pos.x - 1 - ball.radius;
 
-            if (paddle.pos.y + paddle.height > ch) {
-                paddle.pos.y = ch - paddle.height;
-            }
+    // Get prediction
+    const pred = predictBallHit(ball, interceptX, 2000); // 2000 steps max (tunable)
+    const predictedY = pred.y;
+    const steps = Math.max(1, pred.steps); // avoid div by zero
 
-        }
+    // Where should paddle center be to catch predictedY?
+    const targetY = predictedY - paddle.height / 2;
 
-        if (ball.pos.y < paddle.getCenter().y) {
-            paddle.pos.y -= paddle.velocity.y;
-            if (paddle.pos.y <= 0) {
-                paddle.pos.y = 0;
-            }
-        }
+    // Compute required speed (pixels per frame) to reach target in time
+    const distance = targetY - paddle.pos.y;
+    const requiredSpeed = Math.abs(distance) / steps;
+
+    // Tuning: give some margin and clamp speed to reasonable range
+    const marginFactor = 1.15;            // slight speed boost to ensure arrival
+    const minSpeed = 3;                   // don't be too slow
+    const maxSpeed = 30;                  // safety cap so it won't teleport
+    const speed = Math.min(maxSpeed, Math.max(minSpeed, requiredSpeed * marginFactor));
+
+    // Move smoothly towards the target, but not faster than `speed` per frame
+    const dy = targetY - paddle.pos.y;
+    if (Math.abs(dy) > speed) {
+        paddle.pos.y += Math.sign(dy) * speed;
+    } else {
+        paddle.pos.y = targetY;
     }
+
+    // Clamp inside CSS canvas height (ch)
+    if (paddle.pos.y < 0) paddle.pos.y = 0;
+    if (paddle.pos.y + paddle.height > ch) paddle.pos.y = ch - paddle.height;
 }
+
+
 
 function resetBall() {
     ball.pos.x = 100;
-    ball.pos.y = Math.random()*(ch-200) + 100;
+    ball.pos.y = Math.random()*10 + 100;
     // keep the SAME velocity direction but reset speed if needed
     ball.velocity.x *= -1;
     ball.velocity.y *= -1;
 }
 
 
-const ball = new Ball(vec2(100, 100), vec2(5, 5), 7);
-const paddle1 = new Paddle(vec2(0, 100), vec2(5, 5), 10, 110, "#3498DB");
-const paddle2 = new Paddle(vec2(cw - 10, 220), vec2(10, 10), 10, 110, "#E74C3C");
+const ball = new Ball(vec2(100, 100), vec2(5, 5), 9);
+const paddle1 = new Paddle(vec2(5, 100), vec2(10, 10), cw*0.02, ch*0.2, "#3498DB");
+const paddle2 = new Paddle(vec2(cw*0.97, 220), vec2(10, 10), cw*0.02, ch*0.2, "#E74C3C");
 
 
 
@@ -207,6 +305,7 @@ function gameUpdate() {
     ballCollisionWithWalls(ball);
     ballPaddleCollision(ball, paddle1);
     player2Ai(ball, paddle2);
+    // player2Ai(ball, paddle1);
     ballPaddleCollision(ball, paddle2);
 }
 
