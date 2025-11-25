@@ -302,9 +302,9 @@ function drawTrail() {
 }
 
 
-const ball = new Ball(vec2(100, 100), vec2(5, 5), 9);
-const paddle1 = new Paddle(vec2(5, 100), vec2(10, 10), cw * 0.02, ch * 0.2, "#3498DB");
-const paddle2 = new Paddle(vec2(cw * 0.97, 220), vec2(10, 10), cw * 0.02, ch * 0.2, "#E74C3C");
+const ball = new Ball(vec2(100, 100), vec2(7, 7), 9);
+const paddle1 = new Paddle(vec2(5, 100), vec2(10, 10), cw * 0.01, ch * 0.2, "#3498DB");
+const paddle2 = new Paddle(vec2(cw * 0.98, 220), vec2(10, 10), cw * 0.01, ch * 0.2, "#E74C3C");
 
 
 
@@ -313,6 +313,7 @@ function gameUpdate() {
     // Ball goes out on left (paddle1 missed)
     if (ball.pos.x - ball.radius <= 0) {
         lives--;
+        document.getElementById(`${lives+1}live`).style.display = "none";
 
         if (lives <= 0) {
             gameOver = true;
@@ -334,11 +335,11 @@ function gameUpdate() {
 
 
     paddle1.update();
+    // player2Ai(ball, paddle1);
     paddleCollisionWithWall(paddle1);
     ballCollisionWithWalls(ball);
     ballPaddleCollision(ball, paddle1);
     player2Ai(ball, paddle2);
-    // player2Ai(ball, paddle1);
     ballPaddleCollision(ball, paddle2);
 }
 
@@ -350,9 +351,35 @@ function gameDraw() {
 }
 
 
+function boardStyle() {
+    // Set dotted line style
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+
+    ctx.lineWidth = 2;              // thickness
+    ctx.setLineDash([5, 5]);        // [dot length, gap length]
+
+    // Start drawing
+    ctx.beginPath();
+    ctx.moveTo(cw / 2, 0);          // start at left center
+    ctx.lineTo(cw / 2, ch); // end at right center
+    ctx.stroke();
+
+
+    // White dotted circle (0.5 opacity)
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([3, 6]); // small dot, gap
+
+    ctx.beginPath();
+    ctx.arc(cw / 2, ch / 2, 25, 0, Math.PI * 2);
+    ctx.stroke();
+
+}
+
 function gameLoop() {
     ctx.clearRect(0, 0, cw, ch);
 
+    boardStyle();
     if (gameOver) {
         ctx.fillStyle = "#fff";
         ctx.font = "40px Arial";
@@ -366,11 +393,6 @@ function gameLoop() {
 }
 
 gameLoop();
-
-
-
-
-
 
 sound.addEventListener("click", () => {
     sound.classList.toggle("fa-volume-high")

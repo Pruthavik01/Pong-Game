@@ -57,3 +57,17 @@ h1{
     display: flex;
     justify-content: space-between;
 }
+
+.startButton{
+    background-color: #00A63E;
+    color: white;
+    padding: 0.5rem;
+    border-radius: 0.8rem;
+    border: none;
+    width: 15%;
+    position: relative;
+    top: 56%;
+}
+.startButton:active{
+    transform: scale(0.97);
+}
